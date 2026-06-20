@@ -1,0 +1,5 @@
+/** @type {import('tailwindcss').Config} */
+/* NativeWind global CSS entry point */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

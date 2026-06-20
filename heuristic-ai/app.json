@@ -1,0 +1,76 @@
+{
+  "expo": {
+    "name": "HeuristicAI",
+    "slug": "heuristic-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "heuristicai",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.prosun.heuristicai",
+      "infoPlist": {
+        "NSCameraUsageDescription": "HeuristicAI uses the camera to analyze your exercise form in real-time. All processing happens on-device — no video is ever sent to a server.",
+        "NSMicrophoneUsageDescription": "Microphone access is not used by HeuristicAI.",
+        "NSPhotoLibraryUsageDescription": "HeuristicAI uses photo library access to save your workout summary cards."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#0A0A0A"
+      },
+      "package": "com.prosun.heuristicai",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "HeuristicAI uses the camera to analyze your exercise form. All processing is on-device."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#00FF87"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0A0A0A"
+        }
+      ],
+      "expo-web-browser",
+      "expo-sharing"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

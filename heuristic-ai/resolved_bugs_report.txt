@@ -1,0 +1,49 @@
+HEURISTICAI - RESOLVED BUGS AND ERRORS REPORT (PHASE 8C STABILIZATION)
+======================================================================
+
+1. Bi-Directional Sync Blocker
+------------------------------
+- Issue: The original SyncEngine only supported `pushData` (uploading local changes to Supabase). The application lacked a mechanism to download data from the cloud, making it impossible to restore data on a new device or recover after a reinstall.
+- Resolution: Implemented a robust `pullData` method in `SyncEngine`. This connects to the `synchronize` function from WatermelonDB, fetching delta updates (only changes since the last sync) for `profiles`, `sessions`, and `sets`, and merging them into the local database securely.
+
+2. Profile Sync Data Loss
+-------------------------
+- Issue: The profile synchronization logic only accounted for the bare minimum fields (`id`, `firebase_uid`, `created_at`, `updated_at`). All crucial onboarding preferences (such as `display_name`, `training_level`, `goal`, `equipment`, `injuries`, `units`, and `preferences`) were discarded during the cloud sync.
+- Resolution: Extended the WatermelonDB models (`heuristic_profiles`), Supabase schema definitions, and the data mapping layer in `sync-engine.ts` to properly serialize and deserialize the full onboarding profile.
+
+3. WatermelonDB Decorator Crash
+-------------------------------
+- Issue: The application crashed consistently upon completion of the onboarding flow (when trying to save the `User` record). The runtime threw: `Error: Decorating class property failed. Please ensure that transform-class-properties is enabled...`.
+- Resolution: This was a Babel configuration conflict. WatermelonDB relies heavily on legacy decorators (`@field`, `@date`, `@children`), which were not compiling correctly alongside Expo SDK 56 defaults. Adjusted `babel.config.js` to ensure `@babel/plugin-proposal-decorators` ran with `legacy: true` prior to class property transformations.
+
+4. Web Runtime & Android SDK Failures
+-------------------------------------
+- Issue: Running `npx expo start` and pressing 'w' for web threw missing dependency errors: `react-native-web is not installed` and `Unable to resolve module @expo/metro-runtime`. Compiling for Android failed because the local Android SDK paths were unresolved.
+- Resolution: Ran `npx expo install react-native-web @expo/metro-runtime` to pull in the correct Expo SDK 56 compatible versions. Documented the `ANDROID_HOME` platform-tools environment variable setup requirement for local development. Web boot is now functional at `http://localhost:8081`.
+
+5. Firebase Auth Initialization Crash (Test Suite)
+--------------------------------------------------
+- Issue: The test suite threw `ReferenceError: Cannot access 'firebaseApp' before initialization`.
+- Resolution: The module `services/auth/auth-service.ts` had a circular dependency / Temporal Dead Zone issue in the Jest test environment. The import orders and mocked initialization timing in `firebase-init.test.ts` were corrected to ensure the mocked Firebase instance was available before being accessed.
+
+6. Sync Engine Time Mocking Error (Test Suite)
+----------------------------------------------
+- Issue: The sync engine tests crashed with `TypeError: record.createdAt.getTime is not a function`.
+- Resolution: When WatermelonDB passes a record to the sync process, it expects valid Date objects for its internal timestamps. The test mocks were supplying plain objects without a properly instantiated `createdAt` Date. Updated the mock generator to include `createdAt: new Date()`.
+
+7. Database JSI `global` Compilation Error
+------------------------------------------
+- Issue: Running `npm run type-check` produced `TS2304: Cannot find name 'global'` inside `database/index.ts` during the JSI installation check (`global.nativeWatermelonCreateURL`).
+- Resolution: Node's `global` object is not strictly typed in generic Expo environments without specific `@types/node` inclusions. Migrated the code to use the standard cross-platform identifier `globalThis`.
+
+8. Dependency Inconsistencies (Expo Doctor)
+-------------------------------------------
+- Issue: Running `npx expo-doctor` identified mismatched versions for `expo-font`, `expo-splash-screen`, and other core libraries that were out of sync with Expo SDK 56.
+- Resolution: Used `npx expo install --fix` to automatically align all dependencies to their SDK-certified versions. Configured `expo-doctor` within `package.json` to ignore unactionable warnings regarding the New Architecture since we aren't heavily using C++ TurboModules yet.
+
+----------------------------------------------------------------------
+CURRENT STATUS: 
+- 0 Active Bugs
+- 254/254 Unit Tests Passing
+- Clean TypeScript Compilation
+- 21/21 Expo Doctor Checks Passing
