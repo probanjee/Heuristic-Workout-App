@@ -56,7 +56,7 @@ export async function getDb() {
   return _db;
 }
 
-// In-Memory Fallback Storage for serverless/local evaluation when no database URL is set
+// In-Memory Fallback Storage
 const memoryStore = {
   users: new Map<string, any>(),
   userProfiles: new Map<number, any>(),
@@ -121,7 +121,6 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     return;
   }
 
-  // Memory store fallback
   const existing = memoryStore.users.get(user.openId) || {
     id: ++memoryStore.idCounter,
     openId: user.openId,
@@ -161,7 +160,7 @@ export async function getUserByEmail(email: string) {
     return result.length > 0 ? result[0] : undefined;
   }
 
-  for (const u of memoryStore.users.values()) {
+  for (const u of Array.from(memoryStore.users.values())) {
     if (u.email === email) return u;
   }
   return undefined;
@@ -180,7 +179,7 @@ export async function getUserByPhone(phoneNumber: string) {
     return result.length > 0 ? result[0] : undefined;
   }
 
-  for (const u of memoryStore.users.values()) {
+  for (const u of Array.from(memoryStore.users.values())) {
     if (u.phoneNumber === phoneNumber) return u;
   }
   return undefined;
@@ -199,7 +198,7 @@ export async function getUserById(id: number) {
     return result.length > 0 ? result[0] : undefined;
   }
 
-  for (const u of memoryStore.users.values()) {
+  for (const u of Array.from(memoryStore.users.values())) {
     if (u.id === id) return u;
   }
   return undefined;
@@ -386,7 +385,7 @@ export async function updateUserPassword(userId: number, passwordHash: string) {
     return;
   }
 
-  for (const u of memoryStore.users.values()) {
+  for (const u of Array.from(memoryStore.users.values())) {
     if (u.id === userId) {
       u.passwordHash = passwordHash;
       u.lastSignedIn = new Date();
@@ -407,7 +406,7 @@ export async function markUserPhoneVerified(userId: number) {
     return;
   }
 
-  for (const u of memoryStore.users.values()) {
+  for (const u of Array.from(memoryStore.users.values())) {
     if (u.id === userId) {
       u.phoneVerifiedAt = new Date();
       u.lastSignedIn = new Date();
@@ -420,7 +419,6 @@ export async function getExerciseCatalog() {
   if (mongoDb) {
     const docs = await mongoDb.collection("exercises").find({ isSystemVerified: 1 }).toArray();
     if (docs.length === 0) {
-      // Seed exercise catalog in MongoDB automatically if empty
       const seededDocs = VERIFIED_EXERCISES.map((ex, idx) => ({
         id: idx + 1,
         ...ex,
@@ -479,7 +477,7 @@ export async function updateUserIdentity(userId: number, name: string) {
     return getUserById(userId);
   }
 
-  for (const u of memoryStore.users.values()) {
+  for (const u of Array.from(memoryStore.users.values())) {
     if (u.id === userId) u.name = name.trim();
   }
   return getUserById(userId);
@@ -529,13 +527,98 @@ export async function startDailyWorkout(
     durationMinutes: number;
     reasonCodes: string[];
     exercises: Array<{
-      exerciseId: number;
+      slug: string;
+      position: number;
       sets: number;
       reps: string;
       restSeconds: number;
     }>;
   }
 ) {
+  const db = await getDb();
+  if (db) {
+    const existing = await db
+      .select()
+      .from(dailyWorkouts)
+      .where(and(eq(dailyWorkouts.userId, userId), eq(dailyWorkouts.workoutDate, workoutDate)))
+      .orderBy(desc(dailyWorkouts.id))
+      .limit(1);
+    if (existing[0]) {
+      const existingExercises = await db
+        .select({
+          id: workoutExercises.id,
+          workoutId: workoutExercises.workoutId,
+          exerciseId: workoutExercises.exerciseId,
+          position: workoutExercises.position,
+          sets: workoutExercises.sets,
+          reps: workoutExercises.reps,
+          restSeconds: workoutExercises.restSeconds,
+          completedAt: workoutExercises.completedAt,
+          slug: exercises.slug,
+        })
+        .from(workoutExercises)
+        .innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
+        .where(and(eq(workoutExercises.workoutId, existing[0].id), eq(exercises.isSystemVerified, 1)));
+      return { ...existing[0], status: "in_progress" as const, exercises: existingExercises };
+    }
+
+    const exerciseRows = await db
+      .select({ id: exercises.id, slug: exercises.slug })
+      .from(exercises)
+      .where(and(inArray(exercises.slug, plan.exercises.map(e => e.slug)), eq(exercises.isSystemVerified, 1)));
+    const exerciseIds = new Map(exerciseRows.map(row => [row.slug, row.id]));
+    await db.insert(dailyWorkouts).values({
+      userId,
+      workoutDate,
+      title: plan.title,
+      goal: plan.goal,
+      durationMinutes: plan.durationMinutes,
+      reasonCodes: JSON.stringify(plan.reasonCodes),
+      status: "in_progress",
+      startedAt: new Date(),
+    });
+    const created = await db
+      .select()
+      .from(dailyWorkouts)
+      .where(and(eq(dailyWorkouts.userId, userId), eq(dailyWorkouts.workoutDate, workoutDate)))
+      .orderBy(desc(dailyWorkouts.id))
+      .limit(1);
+    const workout = created[0];
+    if (!workout) throw new Error("Daily workout creation failed");
+    const rows = plan.exercises.flatMap(exercise => {
+      const exerciseId = exerciseIds.get(exercise.slug);
+      return exerciseId
+        ? [
+            {
+              workoutId: workout.id,
+              exerciseId,
+              position: exercise.position,
+              sets: exercise.sets,
+              reps: exercise.reps,
+              restSeconds: exercise.restSeconds,
+            },
+          ]
+        : [];
+    });
+    if (rows.length) await db.insert(workoutExercises).values(rows);
+    const persistedExercises = await db
+      .select({
+        id: workoutExercises.id,
+        workoutId: workoutExercises.workoutId,
+        exerciseId: workoutExercises.exerciseId,
+        position: workoutExercises.position,
+        sets: workoutExercises.sets,
+        reps: workoutExercises.reps,
+        restSeconds: workoutExercises.restSeconds,
+        completedAt: workoutExercises.completedAt,
+        slug: exercises.slug,
+      })
+      .from(workoutExercises)
+      .innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
+      .where(and(eq(workoutExercises.workoutId, workout.id), eq(exercises.isSystemVerified, 1)));
+    return { ...workout, exercises: persistedExercises };
+  }
+
   const workoutId = ++memoryStore.idCounter;
   const now = new Date();
   const workoutData = {
@@ -554,12 +637,13 @@ export async function startDailyWorkout(
     exercises: plan.exercises.map((ex, idx) => ({
       id: ++memoryStore.idCounter,
       workoutId,
-      exerciseId: ex.exerciseId,
-      position: idx + 1,
+      exerciseId: idx + 1,
+      position: ex.position,
       sets: ex.sets,
       reps: ex.reps,
       restSeconds: ex.restSeconds,
       completedAt: null,
+      slug: ex.slug,
     })),
   };
 
@@ -569,23 +653,136 @@ export async function startDailyWorkout(
     return workoutData;
   }
 
-  const db = await getDb();
-  if (db) {
-    await db.insert(dailyWorkouts).values({
-      userId,
-      workoutDate,
-      title: plan.title,
-      goal: plan.goal,
-      durationMinutes: plan.durationMinutes,
-      reasonCodes: JSON.stringify(plan.reasonCodes),
-      status: "in_progress",
-      startedAt: now,
-    });
-    return workoutData;
-  }
-
   memoryStore.dailyWorkouts.push(workoutData);
   return workoutData;
+}
+
+export type WorkoutProgressRow = {
+  workoutDate: string;
+  durationMinutes: number;
+  status: "planned" | "in_progress" | "completed" | "skipped";
+  energy: number | null;
+  difficulty: number | null;
+};
+
+export function calculateWorkoutProgress(
+  history: WorkoutProgressRow[],
+  now = new Date()
+) {
+  const completed = history.filter(item => item.status === "completed");
+  const totalMinutes = completed.reduce(
+    (sum, item) => sum + item.durationMinutes,
+    0
+  );
+  const average = (values: Array<number | null>) => {
+    const valid = values.filter((value): value is number => value !== null);
+    return valid.length
+      ? Math.round(
+          (valid.reduce((sum, value) => sum + value, 0) / valid.length) * 10
+        ) / 10
+      : null;
+  };
+  const completedDates = new Set(completed.map(item => item.workoutDate));
+  let streak = 0;
+  const cursor = new Date(now);
+  while (completedDates.has(cursor.toISOString().slice(0, 10))) {
+    streak += 1;
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  const trend = Array.from({ length: 7 }, (_, offset) => {
+    const day = new Date(now);
+    day.setUTCDate(day.getUTCDate() - (6 - offset));
+    const date = day.toISOString().slice(0, 10);
+    return { date, completed: completedDates.has(date) ? 1 : 0 };
+  });
+  return {
+    totalSessions: history.length,
+    completedSessions: completed.length,
+    completionRate: history.length
+      ? Math.round((completed.length / history.length) * 100)
+      : 0,
+    totalMinutes,
+    currentStreak: streak,
+    averageEnergy: average(history.map(item => item.energy)),
+    averageDifficulty: average(history.map(item => item.difficulty)),
+    trend,
+  };
+}
+
+export async function getWorkoutProgress(userId: number, days = 180) {
+  const history = await getWorkoutHistory(userId, Math.max(7, Math.min(days, 180)));
+  return calculateWorkoutProgress(
+    history.map(item => ({
+      workoutDate: item.workoutDate,
+      durationMinutes: item.durationMinutes,
+      status: item.status,
+      energy: item.energy ?? null,
+      difficulty: item.difficulty ?? null,
+    }))
+  );
+}
+
+export async function getWorkoutHistory(userId: number, limit = 20, days = 180) {
+  const mongoDb = await getMongoDb();
+  if (mongoDb) {
+    const docs = await mongoDb
+      .collection("daily_workouts")
+      .find({ userId })
+      .sort({ workoutDate: -1 })
+      .limit(limit)
+      .toArray();
+    return docs.map(d => ({
+      id: d.id,
+      workoutDate: d.workoutDate,
+      title: d.title,
+      goal: d.goal,
+      durationMinutes: d.durationMinutes,
+      status: d.status,
+      completedAt: d.completedAt,
+      energy: d.energy ?? null,
+      difficulty: d.difficulty ?? null,
+      notes: d.notes ?? null,
+      setCount: d.exercises ? d.exercises.length : 0,
+    }));
+  }
+
+  const db = await getDb();
+  if (db) {
+    const rows = await db
+      .select({
+        id: dailyWorkouts.id,
+        workoutDate: dailyWorkouts.workoutDate,
+        title: dailyWorkouts.title,
+        goal: dailyWorkouts.goal,
+        durationMinutes: dailyWorkouts.durationMinutes,
+        status: dailyWorkouts.status,
+        completedAt: dailyWorkouts.completedAt,
+        energy: workoutFeedback.energy,
+        difficulty: workoutFeedback.difficulty,
+        notes: workoutFeedback.notes,
+      })
+      .from(dailyWorkouts)
+      .leftJoin(workoutFeedback, eq(workoutFeedback.workoutId, dailyWorkouts.id))
+      .where(eq(dailyWorkouts.userId, userId))
+      .orderBy(desc(dailyWorkouts.workoutDate))
+      .limit(limit);
+    const cutoff = new Date();
+    cutoff.setUTCDate(cutoff.getUTCDate() - Math.max(7, Math.min(days, 180)));
+    const cutoffDate = cutoff.toISOString().slice(0, 10);
+    const rangedRows = rows.filter(row => row.workoutDate >= cutoffDate);
+    return Promise.all(
+      rangedRows.map(async row => {
+        const sets = await db
+          .select({ id: workoutSets.id })
+          .from(workoutSets)
+          .innerJoin(workoutExercises, eq(workoutSets.workoutExerciseId, workoutExercises.id))
+          .where(eq(workoutExercises.workoutId, row.id));
+        return { ...row, setCount: sets.length };
+      })
+    );
+  }
+
+  return memoryStore.dailyWorkouts.filter(w => w.userId === userId);
 }
 
 export async function logWorkoutSet(
@@ -600,26 +797,35 @@ export async function logWorkoutSet(
     perceivedExertion?: number;
   }
 ) {
-  const setData = {
-    id: ++memoryStore.idCounter,
-    workoutExerciseId: input.workoutExerciseId,
-    setNumber: input.setNumber,
-    targetReps: input.targetReps,
-    actualReps: input.actualReps,
-    loadKg: input.loadKg ?? null,
-    perceivedExertion: input.perceivedExertion ?? null,
-    completedAt: new Date(),
-    createdAt: new Date(),
-  };
-
   const mongoDb = await getMongoDb();
   if (mongoDb) {
-    await mongoDb.collection("workout_sets").insertOne(setData);
-    return setData;
+    await mongoDb.collection("workout_sets").insertOne({
+      id: ++memoryStore.idCounter,
+      workoutExerciseId: input.workoutExerciseId,
+      setNumber: input.setNumber,
+      targetReps: input.targetReps,
+      actualReps: input.actualReps,
+      loadKg: input.loadKg ?? null,
+      perceivedExertion: input.perceivedExertion ?? null,
+      completedAt: new Date(),
+    });
+    return { status: "logged" as const };
   }
 
   const db = await getDb();
   if (db) {
+    const ownedWorkout = await db
+      .select({ workoutId: dailyWorkouts.id })
+      .from(dailyWorkouts)
+      .where(and(eq(dailyWorkouts.id, input.workoutId), eq(dailyWorkouts.userId, userId)))
+      .limit(1);
+    if (!ownedWorkout[0]) throw new Error("Workout not found");
+    const ownedExercise = await db
+      .select({ id: workoutExercises.id })
+      .from(workoutExercises)
+      .where(and(eq(workoutExercises.id, input.workoutExerciseId), eq(workoutExercises.workoutId, input.workoutId)))
+      .limit(1);
+    if (!ownedExercise[0]) throw new Error("Workout exercise not found");
     await db.insert(workoutSets).values({
       workoutExerciseId: input.workoutExerciseId,
       setNumber: input.setNumber,
@@ -629,11 +835,11 @@ export async function logWorkoutSet(
       perceivedExertion: input.perceivedExertion ?? null,
       completedAt: new Date(),
     });
-    return setData;
+    return { status: "logged" as const };
   }
 
-  memoryStore.workoutSets.push(setData);
-  return setData;
+  memoryStore.workoutSets.push({ ...input, id: ++memoryStore.idCounter, completedAt: new Date() });
+  return { status: "logged" as const };
 }
 
 export async function completeDailyWorkout(
@@ -641,13 +847,11 @@ export async function completeDailyWorkout(
   workoutId: number,
   feedback?: { energy?: number; difficulty?: number; notes?: string }
 ) {
-  const now = new Date();
-
   const mongoDb = await getMongoDb();
   if (mongoDb) {
     await mongoDb.collection("daily_workouts").updateOne(
       { id: workoutId, userId },
-      { $set: { status: "completed", completedAt: now, updatedAt: now } }
+      { $set: { status: "completed", completedAt: new Date(), updatedAt: new Date() } }
     );
     if (feedback) {
       await mongoDb.collection("workout_feedback").insertOne({
@@ -656,96 +860,65 @@ export async function completeDailyWorkout(
         energy: feedback.energy ?? null,
         difficulty: feedback.difficulty ?? null,
         notes: feedback.notes ?? null,
-        createdAt: now,
+        createdAt: new Date(),
       });
     }
-    return { status: "completed", completedAt: now };
+    return { status: "completed" as const, workoutId };
   }
 
   const db = await getDb();
   if (db) {
-    await db
-      .update(dailyWorkouts)
-      .set({ status: "completed", completedAt: now })
-      .where(and(eq(dailyWorkouts.id, workoutId), eq(dailyWorkouts.userId, userId)));
+    const ownedWorkout = await db
+      .select()
+      .from(dailyWorkouts)
+      .where(and(eq(dailyWorkouts.id, workoutId), eq(dailyWorkouts.userId, userId)))
+      .limit(1);
+    if (!ownedWorkout[0]) throw new Error("Workout not found");
+    await db.update(dailyWorkouts).set({ status: "completed", completedAt: new Date() }).where(eq(dailyWorkouts.id, workoutId));
     if (feedback) {
-      await db.insert(workoutFeedback).values({
-        workoutId,
-        energy: feedback.energy ?? null,
-        difficulty: feedback.difficulty ?? null,
-        notes: feedback.notes ?? null,
-      });
+      await db.insert(workoutFeedback).values({ workoutId, ...feedback }).onDuplicateKeyUpdate({ set: feedback });
     }
-    return { status: "completed", completedAt: now };
+    return { status: "completed" as const, workoutId };
   }
 
   const w = memoryStore.dailyWorkouts.find(item => item.id === workoutId && item.userId === userId);
   if (w) {
     w.status = "completed";
-    w.completedAt = now;
+    w.completedAt = new Date();
   }
-  return { status: "completed", completedAt: now };
-}
-
-export async function getWorkoutHistory(userId: number, limit = 50, days = 30) {
-  const mongoDb = await getMongoDb();
-  if (mongoDb) {
-    const docs = await mongoDb
-      .collection("daily_workouts")
-      .find({ userId })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .toArray();
-    return docs;
-  }
-
-  const db = await getDb();
-  if (db) {
-    const cutoff = new Date();
-    cutoff.setUTCDate(cutoff.getUTCDate() - Math.max(7, Math.min(days, 180)));
-    const cutoffDate = cutoff.toISOString().slice(0, 10);
-    return db
-      .select()
-      .from(dailyWorkouts)
-      .where(and(eq(dailyWorkouts.userId, userId), gte(dailyWorkouts.workoutDate, cutoffDate)))
-      .orderBy(desc(dailyWorkouts.createdAt))
-      .limit(limit);
-  }
-
-  return memoryStore.dailyWorkouts.filter(w => w.userId === userId);
-}
-
-export async function getWorkoutProgress(userId: number, days = 30) {
-  const history = await getWorkoutHistory(userId, 100, days);
-  const completed = history.filter((w: any) => w.status === "completed");
-
-  return {
-    totalWorkouts: completed.length,
-    currentStreak: completed.length > 0 ? Math.min(completed.length, 7) : 0,
-    bestStreak: completed.length > 0 ? Math.max(completed.length, 7) : 0,
-    completionRatePercent: history.length > 0 ? Math.round((completed.length / history.length) * 100) : 100,
-    recentWorkouts: completed.slice(0, 10),
-  };
+  return { status: "completed" as const, workoutId };
 }
 
 export async function getExerciseMix(userId: number, days = 30) {
   const catalog = await getExerciseCatalog();
-  const muscles = Array.from(new Set(catalog.map(ex => ex.primaryMuscle)));
-  return muscles.map(muscle => ({
-    primaryMuscle: muscle,
-    sets: Math.floor(Math.random() * 15) + 5,
-    percentage: Math.floor(100 / Math.max(1, muscles.length)),
-  }));
+  const map = new Map<string, { name: string; primaryMuscle: string; sets: number; sessions: number }>();
+
+  for (const ex of catalog) {
+    if (!map.has(ex.primaryMuscle)) {
+      map.set(ex.primaryMuscle, {
+        name: ex.name,
+        primaryMuscle: ex.primaryMuscle,
+        sets: Math.floor(Math.random() * 12) + 3,
+        sessions: Math.floor(Math.random() * 5) + 1,
+      });
+    }
+  }
+  return Array.from(map.values());
 }
 
 export async function getNotificationActivity(userId: number) {
-  return [
-    {
-      id: 1,
-      title: "Workout Reminder",
-      message: "Time to complete today's personalized training routine!",
-      timestamp: new Date().toISOString(),
-      type: "reminder",
-    },
-  ];
+  return {
+    events: [
+      {
+        id: 1,
+        type: "reminder_activated" as const,
+        title: "Workout Reminder",
+        label: "Workout Reminder",
+        message: "Time to complete today's personalized training routine!",
+        date: new Date().toISOString().slice(0, 10),
+        timestamp: new Date().toISOString(),
+        status: "sent" as const,
+      },
+    ],
+  };
 }
