@@ -13591,17 +13591,17 @@ var handlers = [
   octetStreamContentTypeHandler
 ];
 function getContentTypeHandler(req) {
-  const handler = handlers.find((handler$1) => handler$1.isMatch(req));
-  if (handler) return handler;
-  if (!handler && req.method === "GET") return jsonContentTypeHandler;
+  const handler2 = handlers.find((handler$1) => handler$1.isMatch(req));
+  if (handler2) return handler2;
+  if (!handler2 && req.method === "GET") return jsonContentTypeHandler;
   throw new TRPCError({
     code: "UNSUPPORTED_MEDIA_TYPE",
     message: req.headers.has("content-type") ? `Unsupported content-type "${req.headers.get("content-type")}` : "Missing content-type header"
   });
 }
 async function getRequestInfo(opts) {
-  const handler = getContentTypeHandler(opts.req);
-  return await handler.parse(opts);
+  const handler2 = getContentTypeHandler(opts.req);
+  return await handler2.parse(opts);
 }
 function isAbortError(error46) {
   return isObject(error46) && error46["name"] === "AbortError";
@@ -41542,23 +41542,36 @@ app.use((_request, response, next) => {
 });
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ limit: "1mb", extended: true }));
+app.use((req, _res, next) => {
+  if (req.url.startsWith("/api/")) {
+    req.url = req.url.slice(4);
+  }
+  next();
+});
 registerStorageProxy(app);
 registerOAuthRoutes(app);
+app.post("/scheduled/reminders", handleReminderCallback);
+app.post("/scheduled/streak-alerts", handleStreakAlertCallback);
 app.post("/api/scheduled/reminders", handleReminderCallback);
 app.post("/api/scheduled/streak-alerts", handleStreakAlertCallback);
 var trpcMiddleware = createExpressMiddleware({
   router: appRouter,
   createContext
 });
-app.use("/api/trpc", trpcMiddleware);
 app.use("/trpc", trpcMiddleware);
+app.use("/api/trpc", trpcMiddleware);
+app.get("/", (_req, res) => {
+  res.json({ status: "ok", service: "Adaptive Fitness Platform API" });
+});
 app.use((err, _req, res, _next) => {
   console.error("[Vercel API Error Handler]", err);
   res.status(500).json({ error: { message: err?.message || "Internal Server Error" } });
 });
-var index_default = app;
+function handler(req, res) {
+  return app(req, res);
+}
 export {
-  index_default as default
+  handler as default
 };
 /*! Bundled license information:
 
