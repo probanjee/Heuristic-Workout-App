@@ -5,8 +5,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
-    "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "start": "cross-env NODE_ENV=production node dist/index.js",
+    "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/server.js",
+    "start": "cross-env NODE_ENV=production node dist/server.js",
     "check": "tsc --noEmit",
     "lint": "prettier --check package.json client/index.html client/src/App.tsx client/src/index.css client/src/components/DashboardLayout.tsx client/src/pages/Home.tsx client/src/pages/FeaturePlaceholder.tsx client/src/pages/Onboarding.tsx docs/architecture.md todo.md",
     "lint:changed": "prettier --check package.json client/src/components/AuthEntry.tsx client/src/pages/Home.tsx client/src/pages/Workout.tsx client/src/pages/Home.navigation.test.ts server/security.ts server/security.test.ts server/_core/index.ts server/workout.execution.persistence.test.ts docs/scheduling.md docs/security.md docs/visual-validation.md todo.md",
