@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -35,7 +35,7 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
   app.disable("x-powered-by");
-  app.use((_request, response, next) => {
+  app.use((_request: Request, response: Response, next: NextFunction) => {
     applySecurityHeaders(response);
     next();
   });
@@ -55,7 +55,7 @@ async function startServer() {
     })
   );
   // Never allow an API request to fall through to the HTML application shell.
-  app.use("/api/trpc", (_request, response) => {
+  app.use("/api/trpc", (_request: Request, response: Response) => {
     response.status(404).json({
       error: { message: "Unknown tRPC procedure", code: "NOT_FOUND" },
     });

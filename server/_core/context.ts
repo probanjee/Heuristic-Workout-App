@@ -1,4 +1,5 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
+import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { User } from "../../drizzle/schema";
 import { createAdminSupabase, createSupabaseServer } from "./supabase";
 import * as db from "../db";
@@ -15,7 +16,7 @@ export async function createContext(
   let user: User | null = null;
 
   try {
-    let supabaseUser: any = null;
+    let supabaseUser: SupabaseAuthUser | null = null;
 
     // 1. Check Authorization Bearer header first (primary for SPA / tRPC client)
     const authHeader = opts.req.headers.authorization;

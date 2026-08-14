@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import type { Request, Response, NextFunction } from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "../server/_core/oauth";
 import { registerStorageProxy } from "../server/_core/storageProxy";
@@ -12,7 +13,7 @@ import { handleStreakAlertCallback } from "../server/scheduled/streaks";
 const app = express();
 app.disable("x-powered-by");
 
-app.use((_request, response, next) => {
+app.use((_request: Request, response: Response, next: NextFunction) => {
   applySecurityHeaders(response);
   next();
 });
@@ -34,7 +35,7 @@ app.use(
   })
 );
 
-app.use("/api/trpc", (_request, response) => {
+app.use("/api/trpc", (_request: Request, response: Response) => {
   response.status(404).json({
     error: { message: "Unknown tRPC procedure", code: "NOT_FOUND" },
   });

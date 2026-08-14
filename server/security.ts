@@ -7,7 +7,7 @@ export const SECURITY_HEADERS = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 } as const;
 
-export function applySecurityHeaders(response: Pick<Response, "setHeader">) {
+export function applySecurityHeaders(response: Response) {
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
     response.setHeader(name, value);
   }
