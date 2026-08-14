@@ -10,10 +10,16 @@ import { handleStreakAlertCallback } from "../server/scheduled/streaks";
 
 const app = express();
 app.disable("x-powered-by");
+
 app.use((_request, response, next) => {
-  applySecurityHeaders(response);
+  try {
+    applySecurityHeaders(response);
+  } catch (e) {
+    console.error("[Security Headers Error]", e);
+  }
   next();
 });
+
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ limit: "1mb", extended: true }));
 
@@ -30,5 +36,11 @@ const trpcMiddleware = createExpressMiddleware({
 
 app.use("/api/trpc", trpcMiddleware);
 app.use("/trpc", trpcMiddleware);
+
+// Global Error Handler middleware to prevent serverless function crash
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("[Vercel API Error Handler]", err);
+  res.status(500).json({ error: { message: err?.message || "Internal Server Error" } });
+});
 
 export default app;
