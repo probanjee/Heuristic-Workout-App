@@ -10,3 +10,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl ?? "", supabaseAnonKey ?? "");
+
+/**
+ * Synchronously or asynchronously retrieve the active Supabase access token.
+ */
+export async function getSupabaseAccessToken(): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}

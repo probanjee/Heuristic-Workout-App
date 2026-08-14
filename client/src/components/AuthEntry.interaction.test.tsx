@@ -15,8 +15,23 @@ import AuthEntry from "./AuthEntry";
 const toastMock = vi.hoisted(() => ({
   error: vi.fn(),
   info: vi.fn(),
+  success: vi.fn(),
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
+vi.mock("@/lib/supabase", () => ({
+  supabase: {
+    auth: {
+      signInWithPassword: vi.fn().mockResolvedValue({ data: { session: {}, user: {} }, error: null }),
+      signUp: vi.fn().mockResolvedValue({ data: { session: {}, user: {} }, error: null }),
+      signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null }),
+      verifyOtp: vi.fn().mockResolvedValue({ data: { session: {} }, error: null }),
+      signInWithOAuth: vi.fn().mockResolvedValue({ data: {}, error: null }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+      signOut: vi.fn().mockResolvedValue({ error: null }),
+    },
+  },
+}));
 vi.mock("framer-motion", () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
   motion: new Proxy({}, { get: () => "div" }),
@@ -114,10 +129,10 @@ describe("AuthEntry interactive behavior", () => {
     ).toBeTruthy();
   });
 
-  it("routes phone-selected signup into OTP verification", async () => {
-    const onEmailSubmit = vi.fn().mockResolvedValue(undefined);
+  it("routes email signup through supabase signUp", async () => {
+    const { supabase } = await import("@/lib/supabase");
     await act(async () => {
-      root.render(React.createElement(AuthEntry, { onEmailSubmit }));
+      root.render(React.createElement(AuthEntry));
     });
 
     await act(async () => {
@@ -136,16 +151,6 @@ describe("AuthEntry interactive behavior", () => {
       fireEvent.input(container.querySelector("#auth-password")!, {
         target: { value: "securepass123" },
       });
-      fireEvent.input(container.querySelector("#auth-signup-phone")!, {
-        target: { value: "+14155552671" },
-      });
-      fireEvent.input(container.querySelector("#auth-birth-date")!, {
-        target: { value: "1990-01-01" },
-      });
-    });
-
-    await act(async () => {
-      fireEvent.click(getByText(container, "Mobile"));
     });
 
     await act(async () => {
@@ -154,10 +159,13 @@ describe("AuthEntry interactive behavior", () => {
       );
     });
 
-    expect(onEmailSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({ deliveryMethod: "phone", isSignup: true })
-    );
-    expect(container.querySelector("#auth-otp")).toBeTruthy();
+    expect(supabase.auth.signUp).toHaveBeenCalledWith({
+      email: "athlete@example.com",
+      password: "securepass123",
+      options: {
+        data: { full_name: "Test Athlete" },
+      },
+    });
   });
 
   it("renders validation feedback when signup receives invalid identity data", async () => {

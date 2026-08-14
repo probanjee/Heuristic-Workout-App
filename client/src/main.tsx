@@ -43,11 +43,22 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       headers() {
-        // Preview auto-login fallback: when the browser blocks iframe cookies
-        // (Safari ITP / private browsing / WebView), the runtime mirrors the
-        // session into sessionStorage so we can forward it as a Bearer token.
-        // The regular OAuth cookie flow keeps working and takes priority server-side.
         try {
+          // Check Supabase session token from localStorage
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("sb-") && key.endsWith("-auth-token")) {
+              const raw = localStorage.getItem(key);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed?.access_token) {
+                  return { Authorization: `Bearer ${parsed.access_token}` };
+                }
+              }
+            }
+          }
+
+          // Legacy preview fallback
           const raw = sessionStorage.getItem("fitness-cookie");
           if (raw) {
             const prefix = `${COOKIE_NAME}=`;
@@ -58,7 +69,7 @@ const trpcClient = trpc.createClient({
             }
           }
         } catch {
-          // sessionStorage unavailable
+          // storage unavailable
         }
         return {};
       },

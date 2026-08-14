@@ -60,12 +60,6 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
-  const emailSignUp = trpc.auth.email.signUp.useMutation();
-  const emailSignIn = trpc.auth.email.signIn.useMutation();
-  const emailVerify = trpc.auth.email.verify.useMutation();
-  const emailResend = trpc.auth.email.resendVerification.useMutation();
-  const phoneRequest = trpc.auth.phone.requestOtp.useMutation();
-  const phoneVerify = trpc.auth.phone.verifyOtp.useMutation();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -76,45 +70,7 @@ export default function DashboardLayout({
   }
 
   if (!user) {
-    return (
-      <AuthEntry
-        onEmailSubmit={async input => {
-          if (input.isSignup) {
-            await emailSignUp.mutateAsync({
-              email: input.email,
-              password: input.password,
-              fullName: input.fullName,
-              phone: input.phone,
-              birthDate: input.birthDate,
-              deliveryMethod: input.deliveryMethod,
-            });
-            toast.success(`Verification code sent by ${input.deliveryMethod}.`);
-          } else {
-            await emailSignIn.mutateAsync({
-              email: input.email,
-              password: input.password,
-            });
-            toast.success("Signed in successfully.");
-          }
-        }}
-        onEmailVerify={async ({ email, code }) => {
-          await emailVerify.mutateAsync({ email, code });
-          toast.success("Email verified. Welcome to Adaptive Fitness.");
-        }}
-        onEmailResend={async email => {
-          await emailResend.mutateAsync({ email });
-          toast.success("A new verification code was sent.");
-        }}
-        onPhoneRequest={async phone => {
-          await phoneRequest.mutateAsync({ phone });
-          toast.success("Verification code sent to your phone.");
-        }}
-        onPhoneVerify={async ({ phone, otp }) => {
-          await phoneVerify.mutateAsync({ phone, code: otp });
-          toast.success("Phone verified. Welcome to Adaptive Fitness.");
-        }}
-      />
-    );
+    return <AuthEntry />;
   }
 
   return (

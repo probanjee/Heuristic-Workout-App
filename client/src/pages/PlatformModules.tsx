@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress as ProgressBar } from "@/components/ui/progress";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft,
@@ -458,7 +459,6 @@ export function Profile() {
   const identity = trpc.profile.updateIdentity.useMutation();
   const saveProfile = trpc.profile.save.useMutation();
   const uploadAvatar = trpc.profile.uploadAvatar.useMutation();
-  const changePassword = trpc.profile.changePassword.useMutation();
   const data = profile.data;
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
@@ -468,6 +468,7 @@ export function Profile() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   useEffect(() => {
     setName(user.data?.name ?? "");
@@ -526,16 +527,20 @@ export function Profile() {
       toast.error("New passwords do not match.");
       return;
     }
+    setIsUpdatingPassword(true);
     try {
-      await changePassword.mutateAsync({ currentPassword, newPassword });
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      toast.success("Password updated.");
+      toast.success("Password updated successfully.");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not update password."
       );
+    } finally {
+      setIsUpdatingPassword(false);
     }
   };
 
@@ -728,7 +733,7 @@ export function Profile() {
               <Button
                 onClick={() => void updatePassword()}
                 disabled={
-                  changePassword.isPending ||
+                  isUpdatingPassword ||
                   !currentPassword ||
                   !newPassword ||
                   !confirmPassword
@@ -736,7 +741,7 @@ export function Profile() {
                 variant="outline"
                 className="mt-4"
               >
-                {changePassword.isPending ? (
+                {isUpdatingPassword ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
                 Change password

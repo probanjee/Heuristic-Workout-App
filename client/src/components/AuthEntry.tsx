@@ -64,25 +64,47 @@ export default function AuthEntry() {
     setIsSubmitting(true);
     try {
       if (isSignup) {
-        const { error } = await supabase.auth.signUp({
-          email,
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim().toLowerCase(),
           password,
           options: {
             data: { full_name: fullName.trim() },
           },
         });
-        if (error) throw error;
-        toast.success("Check your email for a verification link.");
+        if (error) {
+          console.error("Supabase signUp error:", error);
+          throw error;
+        }
+        console.log("Supabase signUp response:", { data });
+        if (data.session) {
+          toast.success("Account created and signed in successfully!");
+        } else if (
+          data.user &&
+          (!data.user.identities || data.user.identities.length === 0)
+        ) {
+          toast.error(
+            "An account with this email already exists. Please sign in."
+          );
+        } else {
+          toast.success(
+            "Account created! Please check your email for a verification link."
+          );
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
           password,
         });
-        if (error) throw error;
+        if (error) {
+          console.error("Supabase signInWithPassword error:", error);
+          throw error;
+        }
+        console.log("Supabase signInWithPassword success:", data);
         toast.success("Signed in successfully.");
       }
     } catch (error: any) {
-      toast.error(error?.message ?? "Authentication failed. Try again.");
+      const msg = error?.message ?? "Authentication failed. Try again.";
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -99,7 +121,10 @@ export default function AuthEntry() {
     setIsSubmitting(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({ phone });
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase signInWithOtp error:", error);
+        throw error;
+      }
       setOtpRequested(true);
       setPhoneResendSeconds(60);
       setPhoneRetryReady(false);
@@ -127,7 +152,10 @@ export default function AuthEntry() {
         token: otp,
         type: "sms",
       });
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase verifyOtp error:", error);
+        throw error;
+      }
       toast.success("Phone verified. Welcome to Adaptive Fitness.");
     } catch (error: any) {
       toast.error(error?.message ?? "Verification failed. Try again.");
@@ -140,10 +168,11 @@ export default function AuthEntry() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
+        redirectTo: `${window.location.origin}/`,
       },
     });
     if (error) {
+      console.error("Supabase Google OAuth error:", error);
       toast.error(error.message ?? "Google sign-in failed.");
     }
   };

@@ -48,11 +48,48 @@ export function useAuth() {
   }, [utils]);
 
   const state = useMemo(() => {
-    const user = meQuery.data ?? null;
-    localStorage.setItem(
-      "fitness-runtime-user-info",
-      JSON.stringify(user)
-    );
+    const user =
+      meQuery.data ??
+      (supabaseUser
+        ? {
+            id: 1,
+            openId: supabaseUser.id,
+            name:
+              supabaseUser.user_metadata?.full_name ??
+              supabaseUser.user_metadata?.name ??
+              (supabaseUser.email
+                ? supabaseUser.email.split("@")[0]
+                : "Athlete"),
+            email: supabaseUser.email ?? null,
+            loginMethod: supabaseUser.app_metadata?.provider ?? "email",
+            passwordHash: null,
+            emailVerifiedAt: supabaseUser.email_confirmed_at
+              ? new Date(supabaseUser.email_confirmed_at)
+              : null,
+            phoneNumber: supabaseUser.phone ?? null,
+            phoneVerifiedAt: supabaseUser.phone_confirmed_at
+              ? new Date(supabaseUser.phone_confirmed_at)
+              : null,
+            role: "user" as const,
+            createdAt: new Date(supabaseUser.created_at),
+            updatedAt: new Date(
+              supabaseUser.updated_at ?? supabaseUser.created_at
+            ),
+            lastSignedIn: new Date(),
+          }
+        : null);
+
+    try {
+      if (user) {
+        localStorage.setItem(
+          "fitness-runtime-user-info",
+          JSON.stringify(user)
+        );
+      } else {
+        localStorage.removeItem("fitness-runtime-user-info");
+      }
+    } catch {}
+
     return {
       user,
       loading: loading || (!!supabaseUser && meQuery.isLoading),
