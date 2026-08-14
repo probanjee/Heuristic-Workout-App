@@ -1,4 +1,3 @@
-import type { Request, Response } from "express";
 import { sdk } from "../_core/sdk";
 
 export const streakAlertCallbackDisabledResponse = {
@@ -9,8 +8,8 @@ export const streakAlertCallbackDisabledResponse = {
 };
 
 export async function handleStreakAlertCallback(
-  request: Request,
-  response: Response
+  request: any,
+  response: any
 ): Promise<void> {
   try {
     const user = await sdk.authenticateRequest(request);
