@@ -33,8 +33,12 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   next();
 });
 
-registerStorageProxy(app);
-registerOAuthRoutes(app);
+try {
+  registerStorageProxy(app);
+  registerOAuthRoutes(app);
+} catch (e) {
+  console.error("[Route Registration Warning]", e);
+}
 
 app.post("/scheduled/reminders", handleReminderCallback);
 app.post("/scheduled/streak-alerts", handleStreakAlertCallback);
@@ -55,6 +59,4 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: { message: err?.message || "Server Error" } });
 });
 
-export default function handler(req: Request, res: Response) {
-  return app(req, res);
-}
+export default app;
