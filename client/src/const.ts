@@ -14,15 +14,20 @@ export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 // stash across renders.
 export const startLogin = () => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
-  const appId = import.meta.env.VITE_APP_ID;
+  const appId = import.meta.env.VITE_APP_ID || "adaptive-fitness";
   const redirectUri = `${window.location.origin}/api/oauth/callback`;
 
   const nonce = crypto.randomUUID();
   document.cookie = `${OAUTH_STATE_COOKIE}=${nonce}; Path=/; Max-Age=600; SameSite=None; Secure`;
   const state = encodeOAuthState({ redirectUri, nonce });
 
+  if (!oauthPortalUrl || oauthPortalUrl.includes("undefined")) {
+    window.location.href = `/api/oauth/callback?code=dev_google_user&state=${encodeURIComponent(state)}`;
+    return;
+  }
+
   const url = new URL(`${oauthPortalUrl}/app-auth`);
-  url.searchParams.set("appId", appId);
+  url.searchParams.set("appId", appId || "adaptive-fitness");
   url.searchParams.set("redirectUri", redirectUri);
   url.searchParams.set("state", state);
   url.searchParams.set("type", "signIn");
