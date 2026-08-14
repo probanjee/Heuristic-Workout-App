@@ -15,7 +15,8 @@ export async function seedVerifiedExercises() {
         isSystemVerified: 1,
       }))
     )
-    .onDuplicateKeyUpdate({
+    .onConflictDoUpdate({
+      target: exercises.slug,
       set: { isSystemVerified: 1 },
     });
   return {

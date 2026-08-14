@@ -138,15 +138,16 @@ describe("Full Application End-to-End & API Integration Suite", () => {
     });
 
     // Start workout
-    const workout = await callerA.workout.startToday();
+    const todayPlan = await callerA.workout.today();
+    expect(todayPlan).toBeTruthy();
+
+    const workout = await callerA.workout.start();
     expect(workout).toBeTruthy();
-    expect(workout.workout).toBeTruthy();
-    expect(Array.isArray(workout.exercises)).toBe(true);
 
     // Progress summary loads without error
     const progress = await callerA.progress.summary({ days: 30 });
     expect(progress).toBeTruthy();
-    expect(typeof progress.totalWorkouts).toBe("number");
+    expect(typeof progress.totalSessions).toBe("number");
   });
 
   it("Teardown: Cleans up test users from Supabase Auth", async () => {
