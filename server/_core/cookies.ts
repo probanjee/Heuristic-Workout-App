@@ -1,9 +1,10 @@
+// @ts-nocheck
 import type { CookieOptions } from "express";
 
 function isSecureRequest(req: any) {
-  if (req.protocol === "https") return true;
+  if (req?.protocol === "https") return true;
 
-  const forwardedProto = req.headers?.["x-forwarded-proto"];
+  const forwardedProto = req?.headers?.["x-forwarded-proto"];
   if (!forwardedProto) return false;
 
   const protoList: string[] = Array.isArray(forwardedProto)

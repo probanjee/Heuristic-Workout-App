@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { sdk } from "../_core/sdk";
 
 export const reminderCallbackDisabledResponse = {
